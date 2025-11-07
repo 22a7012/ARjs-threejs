@@ -1,45 +1,40 @@
-<!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>WebAR 固定オブジェクト</title>
-  <meta name="viewport" content="width=device-width, viewport-fit=cover, shrink-to-fit=no">
+  <title>WebAR カメラ前固定オブジェクト</title>
+  <meta name="viewport" content="width=device-width, viewport-fit=cover, shrink-to-fit=no" />
   <style>
     * { margin: 0; padding: 0; }
-    body, html { width: 100%; height: 100%; overflow: hidden; }
+    .wrapper { position: relative; overflow: hidden; }
     canvas { display: block; width: 100%; height: 100%; }
   </style>
 </head>
 <body>
-  <canvas></canvas>
+  <div class="wrapper">
+    <canvas></canvas>
+  </div>
 
   <!-- Three.js 0.127 -->
   <script src="https://unpkg.com/three@0.127.0/build/three.min.js"></script>
   <!-- r127互換 DeviceOrientationControls -->
   <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r127/examples/js/controls/DeviceOrientationControls.js"></script>
-  <!-- AR.js 3.3.3 -->
+  <!-- AR.js -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/3.3.3/three.js/build/ar.js"></script>
 
   <script>
-    // レンダラー
     const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('canvas'), antialias:true, alpha:true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // シーンとカメラ
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera();
 
-    // スマホ傾きでカメラ操作
     const controls = new THREE.DeviceOrientationControls(camera);
 
-    // AR.js ソース
     const arToolkitSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
-    arToolkitSource.init(() => handleResize());
+    arToolkitSource.init(() => { handleResize(); });
     window.addEventListener('resize', handleResize);
 
-    // AR.js コンテキスト
     const arToolkitContext = new THREEx.ArToolkitContext({
-      cameraParametersUrl: './camera.dat', // 必ず配置
+      cameraParametersUrl: './camera.dat',
       detectionMode: 'mono'
     });
     arToolkitContext.init(() => { camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix()); });
@@ -47,43 +42,36 @@
     // マーカー（スイッチ用）
     const markerRoot = new THREE.Group();
     scene.add(markerRoot);
-    const markerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+    new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
       type: 'pattern',
-      patternUrl: 'patt.hiro' // 必ず配置
+      patternUrl: 'patt.hiro'
     });
 
     // オブジェクト（大きめ）
     const cube = new THREE.Mesh(
-      new THREE.BoxGeometry(2,2,2),
+      new THREE.BoxGeometry(2, 2, 2),
       new THREE.MeshNormalMaterial()
     );
-    cube.visible = false; // 配置前は非表示
+    cube.visible = false;
     scene.add(cube);
 
-    let isPlaced = false; // 配置済みフラグ
+    let isPlaced = false;
 
-    // レンダーループ
     renderer.setAnimationLoop(() => {
       if (arToolkitSource.ready) arToolkitContext.update(arToolkitSource.domElement);
 
-      // マーカーが見えて、まだ配置していない場合
       if (markerRoot.visible && !isPlaced) {
-        markerRoot.updateMatrixWorld(true);
-        const worldPos = new THREE.Vector3();
-        const worldQuat = new THREE.Quaternion();
-        markerRoot.matrixWorld.decompose(worldPos, worldQuat, new THREE.Vector3());
+        // カメラ前方に配置
+        const camDir = new THREE.Vector3(0, 0, -2); // カメラ前方2ユニット
+        camDir.applyQuaternion(camera.quaternion);
+        const camPos = camera.position.clone();
+        cube.position.copy(camPos.add(camDir));
 
-        // カメラ前方・上方向に少しオフセット
-        worldPos.y += 1.0;
-        worldPos.z -= 0.5;
-
-        cube.position.copy(worldPos);
-        cube.quaternion.copy(worldQuat);
-        cube.visible = true; // 表示
-        isPlaced = true;     // 一度だけ配置
+        cube.visible = true;
+        isPlaced = true;
       }
 
-      controls.update();         // スマホ傾きでカメラ更新
+      controls.update();
       renderer.render(scene, camera);
     });
 
@@ -91,10 +79,8 @@
       if (!arToolkitSource.ready) return;
       arToolkitSource.onResize();
       arToolkitSource.copySizeTo(renderer.domElement);
-
-      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
-
       renderer.setPixelRatio(window.devicePixelRatio);
     }
   </script>
