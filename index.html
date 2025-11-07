@@ -1,11 +1,11 @@
 <html>
 <head>
-  <title>WebAR カメラ前固定オブジェクト</title>
+  <title>WebAR 空間固定オブジェクト</title>
   <meta name="viewport" content="width=device-width, viewport-fit=cover, shrink-to-fit=no" />
   <style>
-    * { margin: 0; padding: 0; }
-    .wrapper { position: relative; overflow: hidden; }
-    canvas { display: block; width: 100%; height: 100%; }
+    * { margin:0; padding:0; }
+    .wrapper { position:relative; overflow:hidden; }
+    canvas { display:block; width:100%; height:100%; }
   </style>
 </head>
 <body>
@@ -21,18 +21,23 @@
   <script src="https://raw.githack.com/AR-js-org/AR.js/3.3.3/three.js/build/ar.js"></script>
 
   <script>
+    // レンダラー
     const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('canvas'), antialias:true, alpha:true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
+    // シーンとカメラ
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera();
 
+    // DeviceOrientationControls
     const controls = new THREE.DeviceOrientationControls(camera);
 
-    const arToolkitSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
+    // AR.js ソース
+    const arToolkitSource = new THREEx.ArToolkitSource({ sourceType:'webcam' });
     arToolkitSource.init(() => { handleResize(); });
     window.addEventListener('resize', handleResize);
 
+    // AR.js コンテキスト
     const arToolkitContext = new THREEx.ArToolkitContext({
       cameraParametersUrl: './camera.dat',
       detectionMode: 'mono'
@@ -43,13 +48,13 @@
     const markerRoot = new THREE.Group();
     scene.add(markerRoot);
     new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
-      type: 'pattern',
-      patternUrl: 'patt.hiro'
+      type:'pattern',
+      patternUrl:'patt.hiro'
     });
 
-    // オブジェクト（大きめ）
+    // 大きめオブジェクト
     const cube = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 0.5, 0.5),
+      new THREE.BoxGeometry(2,2,2),
       new THREE.MeshNormalMaterial()
     );
     cube.visible = false;
@@ -57,17 +62,25 @@
 
     let isPlaced = false;
 
+    // レンダーループ
     renderer.setAnimationLoop(() => {
-      if (arToolkitSource.ready) arToolkitContext.update(arToolkitSource.domElement);
+      if(arToolkitSource.ready) arToolkitContext.update(arToolkitSource.domElement);
 
-      if (markerRoot.visible && !isPlaced) {
-        // カメラ前方に配置
-        const camDir = new THREE.Vector3(0, 0, -2); // カメラ前方2ユニット
-        camDir.applyQuaternion(camera.quaternion);
-        const camPos = camera.position.clone();
-        cube.position.copy(camPos.add(camDir));
+      if(markerRoot.visible && !isPlaced){
+        // マーカーのワールド座標で配置
+        markerRoot.updateMatrixWorld(true);
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        const worldScale = new THREE.Vector3();
+        markerRoot.matrixWorld.decompose(worldPos, worldQuat, worldScale);
 
+        // cube に反映
+        cube.position.copy(worldPos);
+        cube.quaternion.copy(worldQuat);
         cube.visible = true;
+
+        // scene に固定してマーカーから切り離す
+        scene.add(cube);
         isPlaced = true;
       }
 
@@ -75,15 +88,14 @@
       renderer.render(scene, camera);
     });
 
-    function handleResize() {
-      if (!arToolkitSource.ready) return;
+    function handleResize(){
+      if(!arToolkitSource.ready) return;
       arToolkitSource.onResize();
       arToolkitSource.copySizeTo(renderer.domElement);
-      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = window.innerWidth/window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setPixelRatio(window.devicePixelRatio);
     }
   </script>
 </body>
 </html>
-
