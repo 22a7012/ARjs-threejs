@@ -1,0 +1,103 @@
+<html>
+<head>
+  <title>WebAR 大きめオブジェクト固定</title>
+  <meta name="viewport" content="width=device-width, viewport-fit=cover, shrink-to-fit=no" />
+  <style>
+    * { margin: 0; padding: 0; }
+    .wrapper { position: relative; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <canvas></canvas>
+  </div>
+
+  <!-- Three.js 0.127 -->
+  <script src="https://unpkg.com/three@0.127.0/build/three.min.js"></script>
+  <!-- r127互換 DeviceOrientationControls -->
+  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r127/examples/js/controls/DeviceOrientationControls.js"></script>
+  <!-- AR.js -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.3.3/three.js/build/ar.js"></script>
+
+  <script>
+    // レンダラー
+    const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('canvas'), antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // シーンとカメラ
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+
+    // スマホ傾きでカメラ操作
+    const controls = new THREE.DeviceOrientationControls(camera);
+
+    // AR.js ソース
+    const arToolkitSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
+    arToolkitSource.init(() => { handleResize(); });
+    window.addEventListener('resize', handleResize);
+
+    // AR.js コンテキスト
+    const arToolkitContext = new THREEx.ArToolkitContext({
+      cameraParametersUrl: './camera.dat',
+      detectionMode: 'mono'
+    });
+    arToolkitContext.init(() => { camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix()); });
+
+    // マーカー（スイッチ用）
+    const markerRoot = new THREE.Group();
+    scene.add(markerRoot);
+    const markerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+      type: 'pattern',
+      patternUrl: 'patt.hiro'
+    });
+
+    // オブジェクト（大きめ）
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 7, 7), // ← サイズを2倍に
+      new THREE.MeshNormalMaterial()
+    );
+    cube.visible = false; // 配置前は非表示
+    scene.add(cube);
+
+    let isPlaced = false; // 一度だけ配置
+
+    // レンダーループ
+    renderer.setAnimationLoop(() => {
+      if (arToolkitSource.ready) arToolkitContext.update(arToolkitSource.domElement);
+
+      if (markerRoot.visible && !isPlaced) {
+        // マーカーのワールド座標に配置
+        markerRoot.updateMatrixWorld(true);
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        markerRoot.matrixWorld.decompose(worldPos, worldQuat, new THREE.Vector3());
+
+        // 少し上・手前にオフセット
+        worldPos.y += 1.0; // 上方向に浮かせる
+        worldPos.z -= 0.5; // 手前にずらす
+
+        cube.position.copy(worldPos);
+        cube.quaternion.copy(worldQuat);
+        cube.visible = true;
+        isPlaced = true;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    });
+
+    function handleResize() {
+      if (!arToolkitSource.ready) return;
+
+      arToolkitSource.onResize();
+      arToolkitSource.copySizeTo(renderer.domElement);
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setPixelRatio(window.devicePixelRatio);
+    }
+  </script>
+</body>
+</html>
